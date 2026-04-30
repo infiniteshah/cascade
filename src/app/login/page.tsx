@@ -36,7 +36,7 @@ function LoginContent() {
         <CardContent className="space-y-4">
           {error && (
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-400">
-              Authentication failed. Please try again.
+              {decodeURIComponent(error)}
             </div>
           )}
           <Button
