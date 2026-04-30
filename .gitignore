@@ -44,3 +44,4 @@ coverage/
 # PWA
 public/sw.js
 public/workbox-*.js
+.vercel
