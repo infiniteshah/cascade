@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { AppShell } from "@/components/app-shell";
 
-export default async function HomePage() {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const supabase = await createClient();
+
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
@@ -11,7 +17,7 @@ export default async function HomePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("household_id")
+    .select("*, households(*)")
     .eq("id", user.id)
     .single();
 
@@ -19,5 +25,9 @@ export default async function HomePage() {
     redirect("/onboarding");
   }
 
-  redirect("/chains");
+  return (
+    <AppShell profile={profile} household={profile.households}>
+      {children}
+    </AppShell>
+  );
 }
