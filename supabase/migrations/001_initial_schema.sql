@@ -59,23 +59,25 @@ CREATE POLICY "Anyone can read household by invite token"
   ON households FOR SELECT
   USING (invite_token IS NOT NULL);
 
--- RLS Policies for profiles
--- Users can view profiles in their household
-CREATE POLICY "Users can view profiles in their household"
-  ON profiles FOR SELECT
-  USING (
-    household_id IN (
-      SELECT household_id FROM profiles WHERE id = auth.uid()
-    )
-    OR id = auth.uid()
-  );
+-- Helper function to get user's household_id without triggering RLS
+CREATE OR REPLACE FUNCTION get_my_household_id()
+RETURNS UUID AS $$
+  SELECT household_id FROM profiles WHERE id = auth.uid()
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Users can insert their own profile
+-- RLS Policies for profiles
+CREATE POLICY "Users can view own profile"
+  ON profiles FOR SELECT
+  USING (id = auth.uid());
+
+CREATE POLICY "Users can view household members"
+  ON profiles FOR SELECT
+  USING (household_id = get_my_household_id());
+
 CREATE POLICY "Users can insert their own profile"
   ON profiles FOR INSERT
   WITH CHECK (id = auth.uid());
 
--- Users can update their own profile
 CREATE POLICY "Users can update their own profile"
   ON profiles FOR UPDATE
   USING (id = auth.uid());
