@@ -54,7 +54,13 @@ export default function OnboardingPage() {
       router.push("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create household");
+      console.error("Create household error:", err);
+      const message = err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : JSON.stringify(err);
+      setError(message);
     } finally {
       setLoading(false);
     }
