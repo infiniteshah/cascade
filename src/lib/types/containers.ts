@@ -46,7 +46,7 @@ export interface ContainerRun {
   started_at: string;
   completed_at: string | null;
   context_snapshot: {
-    time?: string;
+    time_of_day?: TimeOfDay;
     weather?: WeatherCondition;
     duration_input?: number;
     tag?: Tag;
