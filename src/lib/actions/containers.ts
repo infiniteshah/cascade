@@ -36,13 +36,12 @@ export async function getContainers(type: ContainerType): Promise<ContainerWithM
   const supabase = await createClient();
   const householdId = await getHouseholdId();
 
+  // First get containers
   const { data: containers, error } = await supabase
     .from("containers")
     .select(`
       *,
-      owner:profiles!owner_id(display_name, avatar_url),
-      items:container_items(count),
-      runs:container_runs(started_at)
+      owner:profiles!owner_id(display_name, avatar_url)
     `)
     .eq("household_id", householdId)
     .eq("type", type)
@@ -51,10 +50,43 @@ export async function getContainers(type: ContainerType): Promise<ContainerWithM
 
   if (error) throw error;
 
+  // Get item counts and last run separately to avoid ambiguous relationship
+  const containerIds = (containers || []).map(c => c.id);
+
+  if (containerIds.length === 0) {
+    return [];
+  }
+
+  // Get item counts
+  const { data: itemCounts } = await supabase
+    .from("container_items")
+    .select("container_id")
+    .in("container_id", containerIds);
+
+  // Get last runs
+  const { data: lastRuns } = await supabase
+    .from("container_runs")
+    .select("container_id, started_at")
+    .in("container_id", containerIds)
+    .order("started_at", { ascending: false });
+
+  // Build lookup maps
+  const countMap = new Map<string, number>();
+  (itemCounts || []).forEach(item => {
+    countMap.set(item.container_id, (countMap.get(item.container_id) || 0) + 1);
+  });
+
+  const lastRunMap = new Map<string, string>();
+  (lastRuns || []).forEach(run => {
+    if (!lastRunMap.has(run.container_id)) {
+      lastRunMap.set(run.container_id, run.started_at);
+    }
+  });
+
   return (containers || []).map((c: any) => ({
     ...c,
-    item_count: c.items?.[0]?.count || 0,
-    last_run_at: c.runs?.[0]?.started_at || null,
+    item_count: countMap.get(c.id) || 0,
+    last_run_at: lastRunMap.get(c.id) || null,
     owner: c.owner,
   }));
 }
@@ -63,12 +95,10 @@ export async function getContainers(type: ContainerType): Promise<ContainerWithM
 export async function getContainer(id: string): Promise<ContainerWithItems | null> {
   const supabase = await createClient();
 
+  // Get container
   const { data: container, error } = await supabase
     .from("containers")
-    .select(`
-      *,
-      items:container_items(*)
-    `)
+    .select("*")
     .eq("id", id)
     .single();
 
@@ -77,12 +107,17 @@ export async function getContainer(id: string): Promise<ContainerWithItems | nul
     throw error;
   }
 
-  // Sort items by position
-  if (container.items) {
-    container.items.sort((a: ContainerItem, b: ContainerItem) => a.position - b.position);
-  }
+  // Get items separately to avoid ambiguous relationship
+  const { data: items } = await supabase
+    .from("container_items")
+    .select("*")
+    .eq("container_id", id)
+    .order("position", { ascending: true });
 
-  return container as ContainerWithItems;
+  return {
+    ...container,
+    items: items || [],
+  } as ContainerWithItems;
 }
 
 // Create a new container with items
@@ -287,14 +322,19 @@ export async function reorderContainerItems(
     .eq("id", containerId);
 }
 
-// Seed default chains for a household
-export async function seedDefaultChains(): Promise<void> {
+// Seed default chains for a household (called during data fetch, no revalidation)
+export async function seedDefaultChains(): Promise<boolean> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) return false;
 
-  const householdId = await getHouseholdId();
+  let householdId: string;
+  try {
+    householdId = await getHouseholdId();
+  } catch {
+    return false;
+  }
 
   // Check if chains already exist
   const { count } = await supabase
@@ -305,7 +345,7 @@ export async function seedDefaultChains(): Promise<void> {
 
   if (count && count > 0) {
     // Already seeded
-    return;
+    return false;
   }
 
   // Call the seed function
@@ -314,7 +354,10 @@ export async function seedDefaultChains(): Promise<void> {
     p_owner_id: user.id,
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error("Failed to seed default chains:", error);
+    return false;
+  }
 
-  revalidatePath("/chains");
+  return true; // Seeded successfully
 }
