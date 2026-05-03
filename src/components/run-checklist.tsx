@@ -5,22 +5,34 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConditionBadges } from "@/components/condition-badges";
-import { toggleRunItem, overrideItemVisibility, completeRun } from "@/lib/actions/runs";
+import { AddRunItemModal } from "@/components/add-run-item-modal";
+import { toggleRunItem, overrideItemVisibility, completeRun, addRunItem } from "@/lib/actions/runs";
 import type { RunWithItems } from "@/lib/actions/runs";
-import type { ContainerType } from "@/lib/types/containers";
+import type { ContainerType, ItemConditions } from "@/lib/types/containers";
 
 interface RunChecklistProps {
   run: RunWithItems;
   containerType: ContainerType;
+  containerName: string;
   onUpdate: () => void;
 }
 
-export function RunChecklist({ run, containerType, onUpdate }: RunChecklistProps) {
+export function RunChecklist({ run, containerType, containerName, onUpdate }: RunChecklistProps) {
   const [isPending, startTransition] = useTransition();
   const [expandHidden, setExpandHidden] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const visibleItems = run.items.filter((item) => item.is_visible);
   const hiddenItems = run.items.filter((item) => !item.is_visible);
+
+  const handleAddItem = async (item: {
+    text: string;
+    position: number;
+    conditions?: ItemConditions;
+  }) => {
+    await addRunItem(run.id, item);
+    onUpdate();
+  };
 
   // Find the next unchecked visible item
   const nextItemId = visibleItems.find((item) => !item.is_checked)?.id;
@@ -212,6 +224,20 @@ export function RunChecklist({ run, containerType, onUpdate }: RunChecklistProps
         </div>
       )}
 
+      {/* Add Item Button */}
+      {!isCompleted && (
+        <div className="text-center">
+          <Button
+            variant="outline"
+            onClick={() => setShowAddModal(true)}
+            disabled={isPending}
+            className="w-full"
+          >
+            + Add Item
+          </Button>
+        </div>
+      )}
+
       {/* Manual Complete Button */}
       {!isCompleted && allVisibleChecked && visibleItems.length > 0 && (
         <div className="text-center">
@@ -220,6 +246,19 @@ export function RunChecklist({ run, containerType, onUpdate }: RunChecklistProps
           </Button>
         </div>
       )}
+
+      {/* Add Item Modal */}
+      <AddRunItemModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAddItem}
+        containerType={containerType}
+        containerName={containerName}
+        existingItems={run.items.map((item) => ({
+          text: item.container_item.text,
+          position: item.container_item.position,
+        }))}
+      />
     </div>
   );
 }

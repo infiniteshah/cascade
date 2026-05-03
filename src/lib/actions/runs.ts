@@ -247,3 +247,95 @@ export async function getRunHistory(
 
   return runs || [];
 }
+
+/**
+ * Add an item mid-run
+ * Creates both a container_item and a run_item
+ */
+export async function addRunItem(
+  runId: string,
+  item: {
+    text: string;
+    position: number;
+    conditions?: import("@/lib/types/containers").ItemConditions;
+  }
+): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  // Get the run to find the container
+  const { data: run } = await supabase
+    .from("container_runs")
+    .select("container_id, context_snapshot")
+    .eq("id", runId)
+    .single();
+
+  if (!run) throw new Error("Run not found");
+
+  // Get container type
+  const { data: container } = await supabase
+    .from("containers")
+    .select("type")
+    .eq("id", run.container_id)
+    .single();
+
+  if (!container) throw new Error("Container not found");
+
+  // Get existing items to determine positions
+  const { data: existingItems } = await supabase
+    .from("container_items")
+    .select("id, position")
+    .eq("container_id", run.container_id)
+    .order("position", { ascending: true });
+
+  const items = existingItems || [];
+  const insertPosition = item.position;
+
+  // Shift positions of items after the insert point
+  for (const existingItem of items) {
+    if (existingItem.position >= insertPosition) {
+      await supabase
+        .from("container_items")
+        .update({ position: existingItem.position + 1 })
+        .eq("id", existingItem.id);
+    }
+  }
+
+  // Create the container item
+  const { data: newItem, error: itemError } = await supabase
+    .from("container_items")
+    .insert({
+      container_id: run.container_id,
+      text: item.text,
+      position: insertPosition,
+      conditions: container.type === "chain" && item.conditions
+        ? item.conditions
+        : null,
+    })
+    .select()
+    .single();
+
+  if (itemError) throw itemError;
+
+  // Evaluate visibility for chains
+  const isVisible = container.type === "chain" && run.context_snapshot
+    ? evaluateConditions(
+        item.conditions ?? null,
+        run.context_snapshot as RunContext
+      )
+    : true;
+
+  // Create the run item
+  const { error: runItemError } = await supabase
+    .from("run_items")
+    .insert({
+      run_id: runId,
+      container_item_id: newItem.id,
+      is_visible: isVisible,
+      is_checked: false,
+    });
+
+  if (runItemError) throw runItemError;
+}

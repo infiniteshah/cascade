@@ -181,6 +181,7 @@ export default function ChainRunPage() {
           <RunChecklist
             run={run}
             containerType="chain"
+            containerName={chain.name}
             onUpdate={handleRefresh}
           />
         )}

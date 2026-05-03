@@ -124,6 +124,7 @@ export default function ListRunPage() {
           <RunChecklist
             run={run}
             containerType="list"
+            containerName={list.name}
             onUpdate={handleRefresh}
           />
         )}
