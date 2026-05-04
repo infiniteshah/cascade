@@ -7,7 +7,7 @@ export const anthropic = new Anthropic({
 });
 
 // Model to use for all LLM calls
-export const MODEL = "claude-sonnet-4-20250514";
+export const MODEL = "claude-3-5-sonnet-20241022";
 
 // Cost per 1M tokens (as of 2025)
 const COST_PER_1M_INPUT = 3.0; // $3 per 1M input tokens
