@@ -113,8 +113,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ chain });
   } catch (error) {
     console.error("Chain generation error:", error);
+
+    // Provide more specific error messages
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    // Check for common issues
+    if (errorMessage.includes("API key") || errorMessage.includes("401")) {
+      return NextResponse.json(
+        { error: "Anthropic API key not configured. Please add ANTHROPIC_API_KEY to environment variables." },
+        { status: 500 }
+      );
+    }
+
+    if (errorMessage.includes("llm_cost_logs") || errorMessage.includes("relation")) {
+      return NextResponse.json(
+        { error: "Database not configured. Please run migration 003_llm_cost_logging.sql" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to generate chain" },
+      { error: `Failed to generate chain: ${errorMessage}` },
       { status: 500 }
     );
   }

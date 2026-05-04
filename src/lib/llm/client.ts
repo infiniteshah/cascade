@@ -41,18 +41,28 @@ export async function logLLMUsage(
   promptType: PromptType,
   usage: LLMUsage
 ): Promise<void> {
-  const supabase = await createClient();
-  const cost = calculateCost(usage);
+  try {
+    const supabase = await createClient();
+    const cost = calculateCost(usage);
 
-  await supabase.from("llm_cost_logs").insert({
-    household_id: householdId,
-    user_id: userId,
-    prompt_type: promptType,
-    model: MODEL,
-    input_tokens: usage.inputTokens,
-    output_tokens: usage.outputTokens,
-    cost_usd: cost,
-  });
+    const { error } = await supabase.from("llm_cost_logs").insert({
+      household_id: householdId,
+      user_id: userId,
+      prompt_type: promptType,
+      model: MODEL,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+      cost_usd: cost,
+    });
+
+    if (error) {
+      // Log but don't fail the request
+      console.warn("Failed to log LLM usage:", error.message);
+    }
+  } catch (err) {
+    // Log but don't fail the request
+    console.warn("Failed to log LLM usage:", err);
+  }
 }
 
 export async function checkMonthlyCap(householdId: string): Promise<{
@@ -61,15 +71,27 @@ export async function checkMonthlyCap(householdId: string): Promise<{
 }> {
   const supabase = await createClient();
 
-  const { data } = await supabase.rpc("get_household_monthly_cost", {
-    h_id: householdId,
-  });
+  try {
+    const { data, error } = await supabase.rpc("get_household_monthly_cost", {
+      h_id: householdId,
+    });
 
-  const currentCost = Number(data) || 0;
-  return {
-    withinCap: currentCost < MONTHLY_CAP_USD,
-    currentCost,
-  };
+    // If the function doesn't exist yet (migration not run), allow usage
+    if (error) {
+      console.warn("Could not check monthly cap:", error.message);
+      return { withinCap: true, currentCost: 0 };
+    }
+
+    const currentCost = Number(data) || 0;
+    return {
+      withinCap: currentCost < MONTHLY_CAP_USD,
+      currentCost,
+    };
+  } catch {
+    // If anything fails, allow usage but log warning
+    console.warn("Monthly cap check failed, allowing usage");
+    return { withinCap: true, currentCost: 0 };
+  }
 }
 
 export function parseJSONResponse<T>(text: string): T {
