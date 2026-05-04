@@ -10,14 +10,29 @@ import { toggleRunItem, overrideItemVisibility, completeRun, addRunItem } from "
 import type { RunWithItems } from "@/lib/actions/runs";
 import type { ContainerType, ItemConditions } from "@/lib/types/containers";
 
+interface HouseholdMember {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
 interface RunChecklistProps {
   run: RunWithItems;
   containerType: ContainerType;
   containerName: string;
+  householdMembers?: HouseholdMember[];
+  currentUserId?: string;
   onUpdate: () => void;
 }
 
-export function RunChecklist({ run, containerType, containerName, onUpdate }: RunChecklistProps) {
+export function RunChecklist({
+  run,
+  containerType,
+  containerName,
+  householdMembers = [],
+  currentUserId,
+  onUpdate,
+}: RunChecklistProps) {
   const [isPending, startTransition] = useTransition();
   const [expandHidden, setExpandHidden] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -32,6 +47,23 @@ export function RunChecklist({ run, containerType, containerName, onUpdate }: Ru
   }) => {
     await addRunItem(run.id, item);
     onUpdate();
+  };
+
+  // Helper to get member info
+  const getMemberInfo = (userId: string | null) => {
+    if (!userId) return null;
+    return householdMembers.find((m) => m.id === userId);
+  };
+
+  // Helper to get initials
+  const getInitials = (name: string | null) => {
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   // Find the next unchecked visible item
@@ -163,6 +195,23 @@ export function RunChecklist({ run, containerType, containerName, onUpdate }: Ru
                           </p>
                         )}
                       </div>
+
+                      {/* Avatar marker for who checked */}
+                      {item.is_checked && item.checked_by && item.checked_by !== currentUserId && (
+                        <div className="shrink-0">
+                          {getMemberInfo(item.checked_by)?.avatar_url ? (
+                            <img
+                              src={getMemberInfo(item.checked_by)!.avatar_url!}
+                              alt=""
+                              className="h-6 w-6 rounded-full"
+                            />
+                          ) : (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                              {getInitials(getMemberInfo(item.checked_by)?.display_name ?? null)}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </button>
                   </CardContent>
                 </Card>

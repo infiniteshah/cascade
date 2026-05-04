@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { RunChecklist } from "@/components/run-checklist";
-import { getContainer } from "@/lib/actions/containers";
+import { getContainer, getHouseholdMembers } from "@/lib/actions/containers";
 import { startRun, getActiveRun, type RunWithItems } from "@/lib/actions/runs";
+import { useRealtimeRun } from "@/hooks/use-realtime-run";
 import type { ContainerWithItems } from "@/lib/types/containers";
 
 export default function ListRunPage() {
@@ -17,12 +19,23 @@ export default function ListRunPage() {
   const [run, setRun] = useState<RunWithItems | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [householdMembers, setHouseholdMembers] = useState<
+    { id: string; display_name: string | null; avatar_url: string | null }[]
+  >([]);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+
+  // Realtime updates
+  useRealtimeRun(run?.id ?? null, () => {
+    handleRefresh();
+    toast.info("List updated by partner");
+  });
 
   const loadData = useCallback(async () => {
     try {
-      const [listData, activeRun] = await Promise.all([
+      const [listData, activeRun, membersData] = await Promise.all([
         getContainer(listId),
         getActiveRun(listId),
+        getHouseholdMembers(),
       ]);
 
       if (!listData) {
@@ -31,6 +44,8 @@ export default function ListRunPage() {
       }
 
       setList(listData);
+      setHouseholdMembers(membersData.members);
+      setCurrentUserId(membersData.currentUserId);
 
       if (activeRun) {
         // Resume existing run
@@ -125,6 +140,8 @@ export default function ListRunPage() {
             run={run}
             containerType="list"
             containerName={list.name}
+            householdMembers={householdMembers}
+            currentUserId={currentUserId}
             onUpdate={handleRefresh}
           />
         )}

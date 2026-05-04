@@ -3,12 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { RunContextModal } from "@/components/run-context-modal";
 import { RunChecklist } from "@/components/run-checklist";
-import { getContainer } from "@/lib/actions/containers";
+import { getContainer, getHouseholdMembers } from "@/lib/actions/containers";
 import { startRun, getActiveRun, type RunWithItems } from "@/lib/actions/runs";
 import { hasConditionType } from "@/lib/utils/conditions";
+import { useRealtimeRun } from "@/hooks/use-realtime-run";
 import type { ContainerWithItems, Tag, WeatherCondition } from "@/lib/types/containers";
 
 export default function ChainRunPage() {
@@ -21,12 +23,24 @@ export default function ChainRunPage() {
   const [showContextModal, setShowContextModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [householdMembers, setHouseholdMembers] = useState<
+    { id: string; display_name: string | null; avatar_url: string | null }[]
+  >([]);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+
+  // Realtime updates
+  useRealtimeRun(run?.id ?? null, () => {
+    // Refresh run data when realtime update received
+    handleRefresh();
+    toast.info("Run updated by partner");
+  });
 
   const loadData = useCallback(async () => {
     try {
-      const [chainData, activeRun] = await Promise.all([
+      const [chainData, activeRun, membersData] = await Promise.all([
         getContainer(chainId),
         getActiveRun(chainId),
+        getHouseholdMembers(),
       ]);
 
       if (!chainData) {
@@ -35,6 +49,8 @@ export default function ChainRunPage() {
       }
 
       setChain(chainData);
+      setHouseholdMembers(membersData.members);
+      setCurrentUserId(membersData.currentUserId);
 
       if (activeRun) {
         // Resume existing run
@@ -182,6 +198,8 @@ export default function ChainRunPage() {
             run={run}
             containerType="chain"
             containerName={chain.name}
+            householdMembers={householdMembers}
+            currentUserId={currentUserId}
             onUpdate={handleRefresh}
           />
         )}

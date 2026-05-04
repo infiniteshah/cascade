@@ -361,3 +361,28 @@ export async function seedDefaultChains(): Promise<boolean> {
 
   return true; // Seeded successfully
 }
+
+// Get household members
+export async function getHouseholdMembers(): Promise<{
+  members: { id: string; display_name: string | null; avatar_url: string | null }[];
+  currentUserId: string;
+}> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Not authenticated");
+
+  const householdId = await getHouseholdId();
+
+  const { data: members, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .eq("household_id", householdId);
+
+  if (error) throw error;
+
+  return {
+    members: members || [],
+    currentUserId: user.id,
+  };
+}
